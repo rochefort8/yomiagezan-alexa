@@ -1,5 +1,4 @@
 /**
-
  * This sample demonstrates a simple skill built with the Amazon Alexa Skills Kit.
  * The Intent Schema, Custom Slots, and Sample Utterances for this skill, as well as
  * testing instructions are located at http://amzn.to/1LzFrj6
@@ -12,8 +11,9 @@ const Alexa = require('alexa-sdk');
 const yomiagezan = require('./yomiagezan');
 
 const states = {
-    STARTMODE: '_STARTMODE',                // Prompt the user to start or restart the game.
-    ASKMODE: '_ASKMODE',                    // Alexa is asking user the questions.
+    STARTMODE:   '_STARTMODE',             // Prompt the user to start or restart the game.
+    YOMIAGEMODE: '_YOMIAGEMODE',            // Alexa is asking user the questions.
+    REPEATMODE:  '_REPEATRMODE',            // Alexa is asking user the questions.    
 };
 
 // This is used for keeping track of visited nodes when we test for loops in the tree
@@ -71,7 +71,7 @@ let numberOfTotalReading = 100 ;
 // Called when the session starts.
 exports.handler = function (event, context, callback) {
     const alexa = Alexa.handler(event, context);
-    alexa.registerHandlers(newSessionHandler, startHandlers, onReadingHandlers);
+    alexa.registerHandlers(newSessionHandler, startHandlers, yomiageHandlers,repeatHandlers);
     alexa.execute();
 };
 
@@ -98,28 +98,16 @@ const newSessionHandler = {
 // Called at the start of the game, picks and asks first question for the user
 const startHandlers = Alexa.CreateStateHandler(states.STARTMODE, {
     'AMAZON.YesIntent': function () {
+	this.handler.state = states.YOMIAGEMODE;
 
-	// set state to asking questions
-	this.handler.state = states.ASKMODE;
-
+	// Start first action
 	yomiageArray = new Array(10) ;
-	yomiagezan.getYomiageContents(yomiageArray, 8);	
-
-	let message = "" ;
-	for (var i = 0; i < yomiageArray.length; i++) {
-	    message += yomiageArray[i] + "円" ;
-	    if (i < yomiageArray.length - 1) {
-		message +="なり" + pause1s ;
-	    } else {
-		message += "では" ;
-	    }
-	}
+	helper.createYomiageContents(yomiageArray,8);
+	let message = helper.getYomiageMessageByRank(yomiageArray, 8);
 	this.response.speak(message).listen(message);
 	this.emit(':responseReady');
     },
     'AMAZON.NoIntent': function () {
-//    'NoIntent': function () {
-	// Handle No intent.
 	this.response.speak(goodbyeMessage);
 	this.emit(':responseReady');
     },
@@ -145,25 +133,50 @@ const startHandlers = Alexa.CreateStateHandler(states.STARTMODE, {
     }
 });
 
+const yomiageHandlers = Alexa.CreateStateHandler(states.YOMIAGEMODE, {
 
-// user will have been asked a question when this intent is called. We want to look at their yes/no
-// response and then ask another question. If we have asked more than the requested number of questions Alexa will
-// make a choice, inform the user and then ask if they want to play again
-const onReadingHandlers = Alexa.CreateStateHandler(states.ASKMODE, {
-
-    'AMAZON.NextIntent': function () {
-
-	let sum = 0 ;
-	for (var i = 0; i < yomiageArray.length; i++) {
-	    sum += yomiageArray[i] ;
-	}
-	let message = "答えは" + sum + "円です。" ;
+    'AMAZON.YesIntent': function () {
+	this.handler.state = states.REPEATMODE;	
+	let message = helper.getAnswerMessage(yomiageArray) ;
 	this.response.speak(message).listen(message);	
 	this.emit(':responseReady');
     },
     'AMAZON.RepeatIntent': function () {
-	// Handle Yes intent.
-	helper.read(this,'yes');
+	let message = helper.getYomiageMessageByRank(yomiageArray, 8);
+	this.response.speak(message).listen(message);		
+	this.emit(':responseReady');
+    },
+    'AMAZON.HelpIntent': function () {
+	this.response.speak(promptToSayYesNo).listen(promptToSayYesNo);
+	this.emit(':responseReady');
+    },
+    'AMAZON.StopIntent': function () {
+	this.response.speak(goodbyeMessage);
+	this.emit(':responseReady');
+    },
+    'AMAZON.CancelIntent': function () {
+	this.response.speak(goodbyeMessage);
+	this.emit(':responseReady');
+    },
+    'AMAZON.StartOverIntent': function () {
+	// reset the game state to start mode
+	this.handler.state = states.STARTMODE;
+	this.response.speak(welcomeMessage).listen(repeatWelcomeMessage);
+	this.emit(':responseReady');
+    },
+    'Unhandled': function () {
+	this.response.speak(promptToSayYesNo).listen(promptToSayYesNo);
+	this.emit(':responseReady');
+    }
+});
+
+const repeatHandlers = Alexa.CreateStateHandler(states.REPEATMODE, {
+
+    'AMAZON.RepeatIntent': function () {
+	this.handler.state = states.YOMIAGEMODE;
+	helper.createYomiageContents(yomiageArray,8);	
+	let message = helper.getYomiageMessageByRank(yomiageArray, 8);	
+	this.response.speak(message).listen(message);		
 	this.emit(':responseReady');
     },
     'AMAZON.HelpIntent': function () {
@@ -193,39 +206,30 @@ const onReadingHandlers = Alexa.CreateStateHandler(states.ASKMODE, {
 // --------------- Helper Functions  -----------------------
 
 const helper = {
-
-    // logic to provide the responses to the yes or no responses to the main questions
-    
-    read: function (context, reply) {
-
-	// get the speech for the child node
-	let message = helper.getTankaByPosition(readingPosition);
-	context.response.speak(message).listen(message);
+    createYomiageContents: function (yomiageArray, rank) {
+    	yomiagezan.createYomiageContents(yomiageArray, rank);
     },
-    readLast: function (context, reply) {
-
-	// get the speech for the child node
-	let message = helper.getTankaByPosition(readingPosition);
-	message += pause2s + endMessage ;	
-	context.response.speak(message);
-    },    
     
-    // returns the speech for the provided node id
-    getTankaByPosition: function (position) {
-	let tanka_number = readingOrderArray[position];
-/*	
-	let yomiage = tanka.getKaminoku(tanka_number)
-	    + pause500ms
-	    + tanka.getShimonoku(tanka_number)
-	    + pause1s
-	    + tanka.getShimonoku(tanka_number);	
-*/
-	let yomiage = "<audio src='" + tanka.getKaminokuVoiceFilename(tanka_number) + "'/>" 
-	    + pause500ms
-	    + "<audio src='" + tanka.getShimonokuVoiceFilename(tanka_number) + "'/>"
-	    + pause1s
-	    + "<audio src='" + tanka.getShimonokuVoiceFilename(tanka_number) + "'/>" ;	
+    getYomiageMessageByRank: function (yomiageArray) {
 
-	return yomiage;
+	let message = "" ;
+	for (var i = 0; i < yomiageArray.length; i++) {
+	    message += yomiageArray[i] + "円" ;
+	    if (i < yomiageArray.length - 1) {
+		message +="なり" + pause1s ;
+	    } else {
+		message += "では" ;
+	    }
+	}
+	return message ;
+    },
+
+    getAnswerMessage: function (yomiageArray, rank) {    
+	let sum = 0 ;
+	for (var i = 0; i < yomiageArray.length; i++) {
+	    sum += yomiageArray[i] ;
+	}
+	let message = "答えは" + pause100ms + sum + "円です。" ;
+	return message ;
     }
 };
