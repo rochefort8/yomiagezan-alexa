@@ -97,11 +97,23 @@ const newSessionHandler = {
 
 // Called at the start of the game, picks and asks first question for the user
 const startHandlers = Alexa.CreateStateHandler(states.STARTMODE, {
+    'AnswerIntent': function () {
+	if (this.event.request.intent != undefined) {
+	    const intent = this.event.request.intent;
+	    if (intent.slots.answer != undefined) {
+		const answer = this.event.request.intent.slots.answer.value;
+		let message = answer + "と答えました。";
+		this.response.speak(message).listen(message);		
+		this.emit(':responseReady');
+		
+	    }
+	}
+    },
     'AMAZON.YesIntent': function () {
 	this.handler.state = states.YOMIAGEMODE;
 
 	// Start first action
-	yomiageArray = new Array(10) ;
+	yomiageArray = new Array(5) ;
 	helper.createYomiageContents(yomiageArray,8);
 	let message = helper.getYomiageMessageByRank(yomiageArray, 8);
 	this.response.speak(message).listen(message);
@@ -134,7 +146,24 @@ const startHandlers = Alexa.CreateStateHandler(states.STARTMODE, {
 });
 
 const yomiageHandlers = Alexa.CreateStateHandler(states.YOMIAGEMODE, {
-
+    'AnswerIntent': function () {
+	if (this.event.request.intent != undefined) {
+	    this.handler.state = states.REPEATMODE;		    
+	    const intent = this.event.request.intent;
+	    if (intent.slots.answer != undefined) {
+		const answer_by_voice = this.event.request.intent.slots.answer.value;
+		let answer = helper.getAnswer(yomiageArray) ;
+		let message = "" ;
+		if (answer == answer_by_voice) {
+		    message = "正解です。"+ pause500ms + "答えは" + answer + "です。";
+		} else {
+		    message = "残念" + pause500ms + answer_by_voice + "と答えましたが、正解は" + answer + "です。";		    	  }
+		this.response.speak(message).listen(message);		
+		this.emit(':responseReady');
+		
+	    }
+	}
+    },
     'AMAZON.YesIntent': function () {
 	this.handler.state = states.REPEATMODE;	
 	let message = helper.getAnswerMessage(yomiageArray) ;
@@ -224,12 +253,17 @@ const helper = {
 	return message ;
     },
 
-    getAnswerMessage: function (yomiageArray, rank) {    
+    getAnswer: function (yomiageArray) {
 	let sum = 0 ;
 	for (var i = 0; i < yomiageArray.length; i++) {
 	    sum += yomiageArray[i] ;
 	}
-	let message = "答えは" + pause100ms + sum + "円です。" ;
+	return sum ;
+    },
+	
+    getAnswerMessage: function (yomiageArray, rank) {
+	let answer = getAnswer(yomiageArray) ;
+	let message = "答えは" + pause100ms + answer + "円です。" ;
 	return message ;
     }
 };
