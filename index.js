@@ -22,7 +22,7 @@ let visited;
 // These are messages that Alexa says to the user during conversation
 
 // This is the initial welcome message
-const welcomeMessage = "日本人のこころ、小倉百人一首を楽しみましょう。百句ある歌を、ランダムな順番で読み上げます。始めますか？";
+const welcomeMessage = "「読み上げ算」のスキルです。そろばんもしくは暗算で、音声で読み上げられた数字を順に足し引きし、結果を音声で答えてください。";
 
 // This is the message that is repeated if the response to the initial welcome message is not heard
 const repeatWelcomeMessage = "開始する場合は「はい」、終了する場合は「いいえ」でお答えください。";
@@ -41,6 +41,7 @@ const pause2s = "<break time=\"2000ms\"/>";
 // This is the prompt to ask the user if they would like to hear a short description of their chosen profession or to play again
 const playAgainMessage = "これで終わりです。もう一度やりますか？「はい」か「いいえ」でお答えください。 ";
 
+const helpMessage ="「読み上げ算」のスキルです。まず、問題の難易度を「級」で指定します。級があがるに従って、桁数、読み上げ速度が速くなります。その後、「願いましては」の音声のあと、数字が所定回数音声で読み上げられますので、そのとおりに加減算をしてください。最後は「～では」の音声で終わります。その後、「答えは」の後に計算結果を音声で回答してください。たとえば「答えは514」のような感じです。それに対して、正解もしくは不正解が音声で返されます。" ;
 
 // This is the goodbye message when the user has asked to quit the game
 const goodbyeMessage = "さようなら、またお会いしましょう！";
@@ -176,7 +177,7 @@ const yomiageHandlers = Alexa.CreateStateHandler(states.YOMIAGEMODE, {
 	this.emit(':responseReady');
     },
     'AMAZON.HelpIntent': function () {
-	this.response.speak(promptToSayYesNo).listen(promptToSayYesNo);
+	this.response.speak(helpMessage).listen(helpMessage);		
 	this.emit(':responseReady');
     },
     'AMAZON.StopIntent': function () {
@@ -209,7 +210,7 @@ const repeatHandlers = Alexa.CreateStateHandler(states.REPEATMODE, {
 	this.emit(':responseReady');
     },
     'AMAZON.HelpIntent': function () {
-	this.response.speak(promptToSayYesNo).listen(promptToSayYesNo);
+	this.response.speak(helpMessage).listen(helpMessage);	
 	this.emit(':responseReady');
     },
     'AMAZON.StopIntent': function () {
