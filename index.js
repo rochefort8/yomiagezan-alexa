@@ -37,15 +37,17 @@ const repeatWelcomeMessage = "開始する場合は「はい」、終了する�
 const promptToStartMessage = "開始する場合は「はい」、終了する場合は「いいえ」でお答えください。";
 
 // This is the prompt during the game when Alexa doesnt hear or understand a yes / no reply
-const promptToSayYesNo = "「答えは」の後に計算結果をどうぞ。今の読み上げをもう一度繰り返す場合は「もう一度」、終了する場合は「終了」と呼びかけてください。";
+const promptToSayYesNo = "結果を数字でお答えください。読み上げをもう一度繰り返す場合は「もう一度」、終了する場合は「終了」と呼びかけてください。";
 
 const pause500ms = "<break time=\"500ms\"/>";
 const pause100ms = "<break time=\"100ms\"/>";
 const pause1s = "<break time=\"1000ms\"/>";
 const pause2s = "<break time=\"2000ms\"/>";
 
+const repeatAnswerMessage = "結果を数字でお答えください。";
+
 // This is the prompt to ask the user if they would like to hear a short description of their chosen profession or to play again
-const playAgainMessage = "これで終わりです。もう一度やりますか？「はい」か「いいえ」でお答えください。 ";
+const playAgainMessage = "もう一度やりますか？「はい」か「いいえ」でお答えください。 ";
 
 const helpMessage ="「読み上げ算」のスキルです。まず、問題の難易度を「級」で指定します。級があがるに従って、桁数、読み上げ速度が速くなります。その後、「願いましては」の音声のあと、数字が所定回数音声で読み上げられますので、そのとおりに加減算をしてください。最後は「～では」の音声で終わります。その後、「答えは」の後に計算結果を音声で回答してください。たとえば「答えは514」のような感じです。それに対して、正解もしくは不正解が音声で返されます。" ;
 
@@ -134,7 +136,8 @@ const startHandlers = Alexa.CreateStateHandler(states.STARTMODE, {
 	this.emit(':responseReady');
     },
     'Unhandled': function () {
-	this.response.speak(promptToStartMessage).listen(promptToStartMessage);
+	let message = welcomeMessage + repeatWelcomeMessage ;
+	this.response.speak(message).listen(message);
 	this.emit(':responseReady');
     }
 });
@@ -207,6 +210,7 @@ const confirmLankHandlers = Alexa.CreateStateHandler(states.CONFIRMMODE, {
 	let message = yomiageRank + "級の読み上げをはじめます。" + pause1s ;
 	helper.createYomiageContents(yomiageArray,yomiageRank);
 	message += helper.getYomiageMessageByRank(yomiageArray, yomiageRank);
+	message += pause1s + repeatAnswerMessage ;
 	this.response.speak(message).listen(message);
 	this.emit(':responseReady');
     },
@@ -240,21 +244,28 @@ const confirmLankHandlers = Alexa.CreateStateHandler(states.CONFIRMMODE, {
 const yomiageHandlers = Alexa.CreateStateHandler(states.YOMIAGEMODE, {
     'AnswerIntent': function () {
 	if (this.event.request.intent != undefined) {
-	    this.handler.state = states.REPEATMODE;		    
 	    const intent = this.event.request.intent;
 	    if (intent.slots.answer != undefined) {
 		const answer_by_voice = this.event.request.intent.slots.answer.value;
-		let answer = helper.getAnswer(yomiageArray) ;
-		let message = "" ;
-		if (answer == answer_by_voice) {
-		    message = "正解です。"+ pause500ms + "答えは" + answer + "です。";
-		} else {
-		    message = "残念" + pause500ms + answer_by_voice + "と答えましたが、正解は" + answer + "です。";		    	  }
-		this.response.speak(message).listen(message);		
-		this.emit(':responseReady');
-		
+		if (isNaN(answer_by_voice) == false) {
+		    this.handler.state = states.REPEATMODE;		    
+		    let answer = helper.getAnswer(yomiageArray) ;
+		    let message = "" ;
+		    if (answer == answer_by_voice) {
+			message = "正解です。"+ pause500ms + "答えは" + answer + "です。";
+		    } else {
+			message = "残念" + pause500ms + answer_by_voice + "と答えましたが、正解は" + answer + "です。";		           }
+		    message += pause1s + playAgainMessage ;
+		    this.response.speak(message).listen(message);		
+		    this.emit(':responseReady');
+		    return ;
+		}
 	    }
 	}
+	let message = "よく聞き取れませんでしたので、もう一度お願いします。";
+	message += repeatAnswerMessage ;
+	this.response.speak(message).listen(settingLankMessage);		
+	this.emit(':responseReady');
     },
     'AMAZON.YesIntent': function () {
 	this.handler.state = states.REPEATMODE;	
@@ -293,11 +304,16 @@ const yomiageHandlers = Alexa.CreateStateHandler(states.YOMIAGEMODE, {
 
 const repeatHandlers = Alexa.CreateStateHandler(states.REPEATMODE, {
 
-    'AMAZON.RepeatIntent': function () {
+    'AMAZON.YesIntent': function () {
 	this.handler.state = states.YOMIAGEMODE;
-	helper.createYomiageContents(yomiageArray,8);	
-	let message = helper.getYomiageMessageByRank(yomiageArray, 8);	
+	helper.createYomiageContents(yomiageArray,yomiageRank);	
+	let message = helper.getYomiageMessageByRank(yomiageArray,yomiageRank );	
+	message += pause1s + repeatAnswerMessage ;
 	this.response.speak(message).listen(message);		
+	this.emit(':responseReady');
+    },
+    'AMAZON.NoIntent': function () {
+	this.response.speak(goodbyeMessage);
 	this.emit(':responseReady');
     },
     'AMAZON.HelpIntent': function () {
