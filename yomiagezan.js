@@ -12,6 +12,7 @@ const yomiage_rank_list = [
     /*  6 */	{ "min_digit": "2", "max_digit": "3" },
     /*  7 */	{ "min_digit": "2", "max_digit": "2" },
     /*  8 */	{ "min_digit": "1", "max_digit": "2" },
+    /*  9 */	{ "min_digit": "1", "max_digit": "1" },
 ];
 
 const anzan_rank_list = [
@@ -23,6 +24,14 @@ const anzan_rank_list = [
     /*  5 */	{ "min_digit": "1", "max_digit": "2" },
     /*  6 */	{ "min_digit": "1", "max_digit": "1" },
 ];
+
+exports.getMinimalDigitForYomiage = function (rank) {
+    return yomiage_rank_list[rank].min_digit ;
+}
+
+exports.getMaxDigitForYomiage = function (rank) {
+    return yomiage_rank_list[rank].max_digit ;
+}
 
 exports.createYomiageContents = function (array,rank) {
 

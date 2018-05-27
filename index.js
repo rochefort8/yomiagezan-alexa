@@ -12,6 +12,8 @@ const yomiagezan = require('./yomiagezan');
 
 const states = {
     STARTMODE:   '_STARTMODE',             // Prompt the user to start or restart the game.
+    LANKMODE:   '_LANKMODE',            // Alexa is asking user the questions
+    CONFIRMMODE: '_CONFIRMMODE',            // Alexa is asking user the questions.
     YOMIAGEMODE: '_YOMIAGEMODE',            // Alexa is asking user the questions.
     REPEATMODE:  '_REPEATRMODE',            // Alexa is asking user the questions.    
 };
@@ -22,7 +24,11 @@ let visited;
 // These are messages that Alexa says to the user during conversation
 
 // This is the initial welcome message
-const welcomeMessage = "「読み上げ算」のスキルです。そろばんもしくは暗算で、音声で読み上げられた数字を順に足し引きし、結果を音声で答えてください。";
+const welcomeMessage = "「読み上げ算」のスキルです。そろばんや暗算で、音声で読み上げられた数字を順に足し引きし、結果を音声で答えると、答え合わせをしてくれます。";
+
+const settingLankMessage = "読み上げの難しさを示す「級」を指定しましょう！「九級」から一級によって読み上げる数字の桁数、速度、個数が変わり、級の数字が小さくなるほど難しくなります。";
+
+const repeatSettingLankMessage = "「一級」から「九級」まで、音声で指定してください。";
 
 // This is the message that is repeated if the response to the initial welcome message is not heard
 const repeatWelcomeMessage = "開始する場合は「はい」、終了する場合は「いいえ」でお答えください。";
@@ -31,7 +37,7 @@ const repeatWelcomeMessage = "開始する場合は「はい」、終了する�
 const promptToStartMessage = "開始する場合は「はい」、終了する場合は「いいえ」でお答えください。";
 
 // This is the prompt during the game when Alexa doesnt hear or understand a yes / no reply
-const promptToSayYesNo = "今の句を繰り返す場合は「もう一度」、次の句に進む場合は「次へ」、終了する場合は「終了」と呼びかけてください。";
+const promptToSayYesNo = "「答えは」の後に計算結果をどうぞ。今の読み上げをもう一度繰り返す場合は「もう一度」、終了する場合は「終了」と呼びかけてください。";
 
 const pause500ms = "<break time=\"500ms\"/>";
 const pause100ms = "<break time=\"100ms\"/>";
@@ -67,12 +73,15 @@ let readingPosition = 0 ;
 let readingOrderArray ;
 let numberOfTotalReading = 100 ;
 
+let yomiageRank = 0 ;
+
 // --------------- Handlers -----------------------
 
 // Called when the session starts.
 exports.handler = function (event, context, callback) {
     const alexa = Alexa.handler(event, context);
-    alexa.registerHandlers(newSessionHandler, startHandlers, yomiageHandlers,repeatHandlers);
+    alexa.registerHandlers(newSessionHandler, startHandlers, 
+			   settingLankHandlers,confirmLankHandlers,yomiageHandlers,repeatHandlers);
     alexa.execute();
 };
 
@@ -80,7 +89,8 @@ exports.handler = function (event, context, callback) {
 const newSessionHandler = {
     'LaunchRequest': function () {
 	this.handler.state = states.STARTMODE;
-	this.response.speak(welcomeMessage).listen(repeatWelcomeMessage);
+	let message = welcomeMessage + repeatWelcomeMessage ;
+	this.response.speak(message).listen(message);
 	this.emit(':responseReady');
     },'AMAZON.HelpIntent': function () {
 	this.handler.state = states.STARTMODE;
@@ -96,32 +106,113 @@ const newSessionHandler = {
 
 // --------------- Functions that control the skill's behavior -----------------------
 
-// Called at the start of the game, picks and asks first question for the user
 const startHandlers = Alexa.CreateStateHandler(states.STARTMODE, {
-    'AnswerIntent': function () {
-	if (this.event.request.intent != undefined) {
-	    const intent = this.event.request.intent;
-	    if (intent.slots.answer != undefined) {
-		const answer = this.event.request.intent.slots.answer.value;
-		let message = answer + "と答えました。";
-		this.response.speak(message).listen(message);		
-		this.emit(':responseReady');
-		
-	    }
-	}
-    },
     'AMAZON.YesIntent': function () {
-	this.handler.state = states.YOMIAGEMODE;
-
-	// Start first action
-	yomiageArray = new Array(5) ;
-	helper.createYomiageContents(yomiageArray,8);
-	let message = helper.getYomiageMessageByRank(yomiageArray, 8);
+	this.handler.state = states.LANKMODE;
+	let message = settingLankMessage + repeatSettingLankMessage;
 	this.response.speak(message).listen(message);
 	this.emit(':responseReady');
     },
     'AMAZON.NoIntent': function () {
 	this.response.speak(goodbyeMessage);
+	this.emit(':responseReady');
+    },
+    'AMAZON.StopIntent': function () {
+	this.response.speak(goodbyeMessage);
+	this.emit(':responseReady');
+    },
+    'AMAZON.CancelIntent': function () {
+	this.response.speak(goodbyeMessage);
+	this.emit(':responseReady');
+    },
+    'AMAZON.StartOverIntent': function () {
+	this.response.speak(promptToStartMessage).listen(promptToStartMessage);
+	this.emit(':responseReady');
+    },
+    'AMAZON.HelpIntent': function () {
+	this.response.speak(helpMessage).listen(helpMessage);
+	this.emit(':responseReady');
+    },
+    'Unhandled': function () {
+	this.response.speak(promptToStartMessage).listen(promptToStartMessage);
+	this.emit(':responseReady');
+    }
+});
+
+
+// Called at the start of the game, picks and asks first question for the user
+const settingLankHandlers = Alexa.CreateStateHandler(states.LANKMODE, {
+    'LankIntent': function () {
+	if (this.event.request.intent != undefined) {
+	    const intent = this.event.request.intent;
+	    const slot = intent.slots.lankNumber ;
+	    if (slot != undefined) {
+		if (slot.resolutions.resolutionsPerAuthority != undefined) {
+		    const resolutionsPerAuthority = slot.resolutions.resolutionsPerAuthority;
+		    if (resolutionsPerAuthority.length > 0) {
+			const values = resolutionsPerAuthority[0].values;
+			if( values != undefined && values.length > 0){
+			    let rank =  values[0].value.id;
+			    let message = "" ;
+			    if ( (1 <= rank) && (rank <= 9 ) ) {
+				yomiageRank = rank ;
+				this.handler.state = states.CONFIRMMODE;
+				message = rank + "級は、" + helper.createDigitMessage(rank) + "の足し算、引き算になります。よろしければ「はい」、違う級を指定するのであれば「いいえ」とお答えください。";
+
+			    } else {
+				message = rank + " と聞こえました." + repeatSettingLankMessage;
+			    }
+			    this.response.speak(message).listen(message);		
+			    this.emit(':responseReady');
+			    return ;
+			}
+		    }
+		}
+	    }
+	}
+	let message = "よく聞き取れませんでしたので、もう一度お願いします。";
+	this.response.speak(message).listen(settingLankMessage);		
+	this.emit(':responseReady');
+    },
+
+    'AMAZON.StopIntent': function () {
+	this.response.speak(goodbyeMessage);
+	this.emit(':responseReady');
+    },
+    'AMAZON.CancelIntent': function () {
+	this.response.speak(goodbyeMessage);
+	this.emit(':responseReady');
+    },
+    'AMAZON.StartOverIntent': function () {
+	this.response.speak(promptToStartMessage).listen(promptToStartMessage);
+	this.emit(':responseReady');
+    },
+    'AMAZON.HelpIntent': function () {
+	this.response.speak(settingLankMessage).listen(repeatSettingLankMessage);
+	this.emit(':responseReady');
+    },
+    'Unhandled': function () {
+	this.response.speak(promptToStartMessage).listen(promptToStartMessage);
+	this.emit(':responseReady');
+    }
+});
+
+// Called at the start of the game, picks and asks first question for the user
+const confirmLankHandlers = Alexa.CreateStateHandler(states.CONFIRMMODE, {
+    'AMAZON.YesIntent': function () {
+	this.handler.state = states.YOMIAGEMODE;
+
+	yomiageArray = new Array(5) ;
+
+	let message = yomiageRank + "級の読み上げをはじめます。" + pause1s ;
+	helper.createYomiageContents(yomiageArray,yomiageRank);
+	message += helper.getYomiageMessageByRank(yomiageArray, yomiageRank);
+	this.response.speak(message).listen(message);
+	this.emit(':responseReady');
+    },
+    'AMAZON.NoIntent': function () {
+	this.handler.state = states.LANKMODE;
+	this.response.speak(settingLankMessage).listen(repeatSettingLankMessage);
 	this.emit(':responseReady');
     },
     'AMAZON.StopIntent': function () {
@@ -239,10 +330,23 @@ const helper = {
     createYomiageContents: function (yomiageArray, rank) {
     	yomiagezan.createYomiageContents(yomiageArray, rank);
     },
-    
-    getYomiageMessageByRank: function (yomiageArray) {
+
+    createDigitMessage: function (rank) {
+	let min_digit = yomiagezan.getMinimalDigitForYomiage(rank);
+	let max_digit = yomiagezan.getMaxDigitForYomiage(rank);
 
 	let message = "" ;
+	if (min_digit == max_digit) {
+	    message = min_digit + "桁" ;
+	} else {
+	    message = min_digit + "桁から" + max_digit + "桁" ;
+	}
+	return message;
+    },
+
+    getYomiageMessageByRank: function (yomiageArray) {
+
+	let message = "願いましては" + pause500ms ;
 	for (var i = 0; i < yomiageArray.length; i++) {
 	    message += yomiageArray[i] + "円" ;
 	    if (i < yomiageArray.length - 1) {
